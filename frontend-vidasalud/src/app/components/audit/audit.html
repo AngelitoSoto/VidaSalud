@@ -1,0 +1,217 @@
+<div class="audit-page">
+  <div class="vs-header-actions">
+    <div>
+      <h2>Auditoría, Mensajería & Streaming en Tiempo Real</h2>
+      <p>Consola unificada de eventos: RabbitMQ (Transaccional AMQP) y Apache Kafka (Streaming, Analítica & Telemetría).</p>
+    </div>
+    <div class="vs-header-btns">
+      <button class="vs-btn vs-btn-secondary" (click)="openRabbitMqManagement()" title="Abrir Consola RabbitMQ en AWS (http://3.215.109.69:15672)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+        Consola RabbitMQ AWS (15672)
+      </button>
+      <button class="vs-btn vs-btn-kafka" (click)="openKafkaUi()" title="Abrir Consola Kafka-UI en AWS (http://3.215.109.69:8090)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
+        Consola Kafka-UI AWS (8090)
+      </button>
+    </div>
+  </div>
+
+  <!-- PANEL DE STREAMING & ANALÍTICA APACHE KAFKA (EVALUACIÓN 5) -->
+  <div class="kafka-test-card vs-card">
+    <div class="kafka-card-header">
+      <div class="kafka-title-group">
+        <span class="kafka-badge">Apache Kafka Streaming</span>
+        <h3>Consola de Eventos en Tiempo Real (Tópicos, Analítica & Consumer Groups)</h3>
+      </div>
+      <span *ngIf="isLoadingKafka" class="loading-tag">Procesando en Kafka...</span>
+    </div>
+
+    <div class="kafka-actions-grid">
+      <!-- Columna 1: Publicación de Streams -->
+      <div class="kafka-action-box">
+        <h4>1. Publicar Streams de Dominio</h4>
+        <p class="kafka-action-desc">Transmite eventos serializados en JSON hacia los tópicos configurados para analítica y auditoría.</p>
+        
+        <div class="button-group-wrap">
+          <button class="vs-btn vs-btn-kafka-telemetry vs-btn-sm" [disabled]="isLoadingKafka" (click)="publishKafkaTelemetry()">
+            Telemetría Citas (Topic: telemetry)
+          </button>
+          <button class="vs-btn vs-btn-kafka-audit vs-btn-sm" [disabled]="isLoadingKafka" (click)="publishKafkaAudit()">
+            Auditoría Seguridad (Topic: audit)
+          </button>
+          <button class="vs-btn vs-btn-danger vs-btn-sm" [disabled]="isLoadingKafka" (click)="publishKafkaError()">
+            Simular Fallo (Prueba Reintentos / BackOff)
+          </button>
+        </div>
+      </div>
+
+      <!-- Columna 2: Administración Dinámica de Tópicos (ms-admin) -->
+      <div class="kafka-action-box">
+        <h4>2. Administración Dinámica de Tópicos (ms-admin)</h4>
+        <p class="kafka-action-desc">Crear y eliminar tópicos en caliente en el cluster vía <code>KafkaAdminService</code>.</p>
+
+        <div class="queue-admin-controls">
+          <input type="text" class="vs-input vs-input-sm" [(ngModel)]="newKafkaTopicName" placeholder="Nombre tópico (ej: vidasalud.telemetry.dental)">
+          <div class="kafka-inputs-row">
+            <div>
+              <label class="input-sublabel">Particiones:</label>
+              <input type="number" class="vs-input vs-input-sm" [(ngModel)]="newKafkaTopicPartitions" min="1" max="10">
+            </div>
+            <div>
+              <label class="input-sublabel">Retención (días):</label>
+              <input type="number" class="vs-input vs-input-sm" [(ngModel)]="newKafkaTopicRetentionDays" min="1" max="60">
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="vs-btn vs-btn-primary vs-btn-sm" [disabled]="isLoadingKafka" (click)="createKafkaTopic()">
+              Crear Tópico
+            </button>
+            <button class="vs-btn vs-btn-danger-outline vs-btn-sm" [disabled]="isLoadingKafka" (click)="deleteKafkaTopic(newKafkaTopicName)">
+              Eliminar Tópico
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Columna 3: Tópicos y Consumer Groups Activos -->
+      <div class="kafka-action-box">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h4>3. Estado del Cluster Kafka</h4>
+          <button class="vs-btn vs-btn-secondary vs-btn-xs" (click)="loadKafkaTopics(); loadKafkaConsumerGroups()">Refrescar</button>
+        </div>
+        
+        <div class="cluster-summary-section">
+          <p class="input-sublabel">Tópicos Detectados ({{ kafkaTopics.length }}):</p>
+          <div class="topic-chip-container">
+            <span *ngFor="let t of kafkaTopics" class="topic-chip" [title]="'Clic para seleccionar: ' + t.name" (click)="newKafkaTopicName = t.name" style="cursor: pointer;">
+              {{ t.name }} (P:{{ t.partitions }})
+            </span>
+            <span *ngIf="kafkaTopics.length === 0" class="text-dim-sm">Cargando o tópicos automáticos provistos por NewTopic beans...</span>
+          </div>
+
+          <p class="input-sublabel" style="margin-top: 0.5rem;">Consumer Groups (Indicador 8):</p>
+          <div class="group-chip-container">
+            <span class="group-badge">vidasalud-analytics-group</span>
+            <span class="group-badge">vidasalud-audit-group</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feedback / Resultado de la Operación Kafka -->
+    <div *ngIf="lastKafkaResult" class="rabbit-feedback" [class.success]="lastKafkaResult.status === 'SUCCESS'" [class.error]="lastKafkaResult.status === 'ERROR'">
+      <div class="feedback-header">
+        <strong>[{{ lastKafkaResult.timestamp }}] {{ lastKafkaResult.action }}</strong>
+        <span class="status-indicator">{{ lastKafkaResult.status }}</span>
+      </div>
+      <p class="feedback-msg">{{ lastKafkaResult.message }}</p>
+      <pre *ngIf="lastKafkaResult.details" class="feedback-json">{{ lastKafkaResult.details | json }}</pre>
+    </div>
+  </div>
+
+  <!-- PANEL DE PRUEBAS DE MENSAJERÍA ASÍNCRONA RABBITMQ (EVALUACIÓN 4) -->
+  <div class="rabbit-test-card vs-card">
+    <div class="rabbit-card-header">
+      <div class="rabbit-title-group">
+        <span class="rabbit-badge">RabbitMQ AMQP 0-9-1</span>
+        <h3>Consola de Pruebas: Publicación & Manejo de Errores (ACK / DLQ)</h3>
+      </div>
+      <span *ngIf="isLoadingRabbit" class="loading-tag">Ejecutando operación...</span>
+    </div>
+
+    <div class="rabbit-actions-grid">
+      <!-- Columna 1: Publicación de Eventos -->
+      <div class="rabbit-action-box">
+        <h4>1. Publicar Eventos de Dominio</h4>
+        <p class="rabbit-action-desc">Dispara eventos desde <code>ms-appointments</code> enrutados a través de exchanges a <code>ms-notify</code>.</p>
+        
+        <div class="button-group-wrap">
+          <button class="vs-btn vs-btn-success vs-btn-sm" [disabled]="isLoadingRabbit" (click)="publishEvent('email', false)">
+            Publicar Email (Éxito -> ACK)
+          </button>
+          <button class="vs-btn vs-btn-danger vs-btn-sm" [disabled]="isLoadingRabbit" (click)="publishEvent('email', true)">
+            Simular Fallo Email (-> DLQ)
+          </button>
+          <button class="vs-btn vs-btn-secondary vs-btn-sm" [disabled]="isLoadingRabbit" (click)="publishEvent('admission', false)">
+            Topic: Admisión Cita
+          </button>
+          <button class="vs-btn vs-btn-secondary vs-btn-sm" [disabled]="isLoadingRabbit" (click)="publishEvent('record', false)">
+            Topic: Ficha Clínica
+          </button>
+        </div>
+      </div>
+
+      <!-- Columna 2: Administración Dinámica de Colas -->
+      <div class="rabbit-action-box">
+        <h4>2. Administración Dinámica (ms-admin)</h4>
+        <p class="rabbit-action-desc">Crear y eliminar colas, exchanges y bindings dinámicamente mediante <code>RabbitAdminService</code>.</p>
+
+        <div class="queue-admin-controls">
+          <input type="text" class="vs-input vs-input-sm" [(ngModel)]="customQueueName" placeholder="Nombre de cola (ej: q.cmd.prueba)">
+          <div class="btn-row">
+            <button class="vs-btn vs-btn-primary vs-btn-sm" [disabled]="isLoadingRabbit" (click)="createDynamicQueue()">
+              Crear Cola
+            </button>
+            <button class="vs-btn vs-btn-danger-outline vs-btn-sm" [disabled]="isLoadingRabbit" (click)="deleteDynamicQueue()">
+              Eliminar Cola
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feedback / Resultado de la Operación RabbitMQ -->
+    <div *ngIf="lastRabbitResult" class="rabbit-feedback" [class.success]="lastRabbitResult.status === 'SUCCESS'" [class.error]="lastRabbitResult.status === 'ERROR'">
+      <div class="feedback-header">
+        <strong>[{{ lastRabbitResult.timestamp }}] {{ lastRabbitResult.action }}</strong>
+        <span class="status-indicator">{{ lastRabbitResult.status }}</span>
+      </div>
+      <p class="feedback-msg">{{ lastRabbitResult.message }}</p>
+      <pre *ngIf="lastRabbitResult.details" class="feedback-json">{{ lastRabbitResult.details | json }}</pre>
+    </div>
+  </div>
+
+  <!-- TABLA DE HISTORIAL DE AUDITORÍA -->
+  <div class="vs-header-actions" style="margin-top: 1rem;">
+    <div>
+      <h3>Trazabilidad de Eventos & Auditoría</h3>
+      <p>Historial unificado de transacciones RabbitMQ y streams Apache Kafka procesados por el sistema.</p>
+    </div>
+    <div class="vs-search-box">
+      <input type="text" class="vs-input" [(ngModel)]="searchTerm" placeholder="Buscar por usuario, evento o ID...">
+    </div>
+  </div>
+
+  <div class="vs-table-container">
+    <table class="vs-table">
+      <thead>
+        <tr>
+          <th>ID Audit</th>
+          <th>Fecha / Hora</th>
+          <th>Usuario / Origen</th>
+          <th>Rol</th>
+          <th>Tipo de Evento</th>
+          <th>Ref. Atención</th>
+          <th>Exchange / Tópico</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let log of filteredLogs">
+          <td><strong>{{ log.id }}</strong></td>
+          <td class="text-dim" style="font-size: 0.8rem;">{{ log.timestamp }}</td>
+          <td class="font-bold">{{ log.usuario }}</td>
+          <td><span class="role-badge">{{ log.rol }}</span></td>
+          <td>
+            <span class="event-chip" 
+                  [class.event-error]="log.evento.includes('NACK') || log.evento.includes('DLQ') || log.evento.includes('ERROR')"
+                  [class.event-kafka]="log.evento.includes('KAFKA')">
+              {{ log.evento }}
+            </span>
+          </td>
+          <td><strong>{{ log.atencionId }}</strong></td>
+          <td><span class="origin-tag">{{ log.origen }}</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
